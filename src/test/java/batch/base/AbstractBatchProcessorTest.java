@@ -24,19 +24,11 @@ public class AbstractBatchProcessorTest {
         }
     }
 
-
     private MyJob job;
-    private Consumer<JobResult<MyJob>> success;
-    private Consumer<Throwable> failure;
 
     @BeforeEach
     void setUp() {
-        success = mock(Consumer.class);
-        failure = mock(Consumer.class);
-
         job = mock(MyJob.class);
-        when(job.getSuccessCallback()).thenReturn(success);
-        when(job.getFailCallback()).thenReturn(failure);
     }
 
     @Test
