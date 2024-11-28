@@ -5,6 +5,7 @@ import batch.base.*;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 
 public class Main {
@@ -43,9 +44,15 @@ class TelemetryJob extends AbstractJob<TelemetryJob> {
 
     @Override
     public TelemetryJobResult<TelemetryJob> process() {
-        // TODO: Job execution logic goes here
+
+        /*
+         * Here we process a single job and return the result. Addresses criteria:
+         *
+         * "the endpoint responds with data pertaining to each individual object"
+         */
+
         System.out.println(Thread.currentThread() + "    Executing a job and returning a result");
-        return new TelemetryJobResult<>("outputVal");
+        return new TelemetryJobResult<>("Successful result from single job");
     }
 }
 
@@ -59,15 +66,43 @@ class TelemetryProcessor extends AbstractBatchProcessor<TelemetryJob> {
     @Override
     public void dispatch(List<TelemetryJob> jobs) {
         System.out.println(Thread.currentThread() + "  Starting dispatch...");
-        jobs.forEach(job -> {
-            CompletableFuture
+
+        ConcurrentLinkedQueue<TelemetryJobResult<TelemetryJob>> jobResults = new ConcurrentLinkedQueue<>();
+
+        // Get result of each Job (but do not notify of the result - this is now done after the whole batch is processed)
+        List<CompletableFuture<Void>> futures = jobs.stream()
+            .map(job -> CompletableFuture
                 .supplyAsync(() -> job.process())
-                .thenAccept(jobResult -> job.getSuccessCallback().accept(jobResult))
-                .exceptionally(throwable -> {
+                .thenAccept(jobResult -> {
+                    jobResults.add(jobResult);
+                }).exceptionally(throwable -> {
                     job.getFailCallback().accept(throwable);
                     return null;
-                });
+                }))
+            .toList();
+
+
+        /*
+         * Afterward, we optionally perform further operations with all JobResults in the batch.
+         * Addresses criteria: "combining batches of multiple objects into a single request".
+         *
+         * This approach gives the external user control over how they want Jobs to be processed.
+         * i.e. individually, as a batch only, or individually + batched (as per this example)
+         *
+         * Note:  this was not included in the original submission as the assessment explicitly
+         * stated "don't implement the scenario".
+         */
+        CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        allOf.thenRun(() -> {
+            jobResults.forEach(job -> {
+                // Now you can make an API call using all JobResults in the batch
+            });
+            String mockApiResponse = "Successfully processed all jobs";
+
+            // Then notify each Job of the batch result
+            jobs.forEach(job -> job.getSuccessCallback().accept(new TelemetryJobResult<>(mockApiResponse)));
         });
+
         System.out.println(Thread.currentThread() + "  Dispatch complete.\n" );
     }
 }
