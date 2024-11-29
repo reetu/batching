@@ -13,7 +13,10 @@ public interface ProcessorConfig {
     int batchSize();
 
     /**
-     * @return Interval (in milliseconds) after which Processor.readyToDispatch() is called.
+     * Ideally set lower than batchInterval, so we can check if a batch is ready for early dispatch, i.e. earlier
+     * than the standard batchInterval.
+     *
+     * @return Interval (in milliseconds) after which we check if a batch is ready to be dispatched.
      */
     long pollInterval();
 }
