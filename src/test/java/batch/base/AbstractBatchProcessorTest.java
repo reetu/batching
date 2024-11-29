@@ -1,9 +1,12 @@
 package batch.base;
 
+import batch.Job;
 import batch.JobResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -133,6 +136,27 @@ public class AbstractBatchProcessorTest {
         processor.submit(job);
 
         assertTrue(processor.readyToDispatch());
+    }
+
+    @Test
+    void testDispatchSuccess() throws InterruptedException {
+        record MyJobResult(String result) implements JobResult<MyJob>{}
+        BatchProcessorConfig config = new BatchProcessorConfig(1, 1, 1);
+        AbstractBatchProcessor<MyJob> processor = new AbstractBatchProcessor<MyJob>(config) {
+            @Override
+            public void dispatch(List<MyJob> jobs) {
+                jobs.forEach(job -> job.getSuccessCallback().accept(new MyJobResult("Result ok")));
+            }
+        };
+        processor.start();
+
+        MyJob job1 = new MyJob(mock(Consumer.class), mock(Consumer.class));
+        processor.submit(job1);
+
+        // Wait for processor to batch
+        Thread.sleep(100);
+
+        verify(job1.getSuccessCallback()).accept(any(JobResult.class));
     }
 
     private AbstractBatchProcessor<MyJob> buildProcessor() {
